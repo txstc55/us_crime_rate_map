@@ -14,8 +14,11 @@
               There is a scaling factor for the height,<br />
               which is different for population density and crime rate<br />
               The scaling factor is there so the map won't be too flat<br /><br />
+              Move your mouse around while holding<br />
+              left click or right click to move the map<br /><br />
+
               Find a bug?<br />
-              Contact me @ TXSTC55[at]gmail[dot]com<br />
+              Contact me @ txstc55[at]gmail[dot]com<br />
             </div>
           </div>
         </div>
