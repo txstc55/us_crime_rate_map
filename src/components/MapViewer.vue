@@ -16,8 +16,7 @@
               The scaling factor is there so the map won't be too flat<br /><br />
               Move your mouse around while holding<br />
               left click or right click to move the map<br /><br />
-
-              Find a bug?<br />
+              Found a bug?<br />
               Contact me @ txstc55[at]gmail[dot]com<br />
             </div>
           </div>
