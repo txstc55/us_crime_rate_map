@@ -118,7 +118,7 @@ class MapLoader {
         // extrude setting for creating mesh from 2d shape
         var extrudeSettings = {
             steps: 1,
-            depth: 200,
+            depth: 150,
             bevelEnabled: false,
         };
 
@@ -137,8 +137,9 @@ class MapLoader {
                     });
 
                     const shapes = SVGLoader.createShapes(path);
-                    const geometry = new THREE.ExtrudeBufferGeometry(shapes, extrudeSettings);
+                    const geometry = new THREE.ExtrudeGeometry(shapes, extrudeSettings);
                     // geometry.computeBoundsTree();
+
                     const mesh = new THREE.Mesh(geometry, material);
                     mesh.scale.z = 0.00001;
                     mesh.county = countyInfo[i][1];
@@ -146,8 +147,14 @@ class MapLoader {
                     mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
                     mesh.rate = 0.0;
                     me.reset(mesh, true);
-
                     me.countyGroup.add(mesh);
+
+                    // const wireframe = new THREE.WireframeGeometry(geometry);
+                    // const line = new THREE.LineSegments(wireframe);
+                    // line.material.depthTest = false;
+                    // line.material.opacity = 0.25;
+                    // line.material.transparent = true;
+                    // me.countyGroup.add(line);
                 }
             },
             // called when loading is in progresses
@@ -262,12 +269,10 @@ class MapLoader {
                     }
                 }
                 mouseMoved = false;
+                labelRenderer.render(scene, camera);
             }
             me.changeHeightAndColor();
-
             renderer.render(scene, camera);
-            labelRenderer.render(scene, camera);
-
         };
         this.animate();
     }
