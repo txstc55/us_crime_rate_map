@@ -5,7 +5,7 @@
       <div id="menuInfo">
         <div id="menuInfoWrapper" class="menuWrapper">
           <div id="menuInfoFormDiv">
-            <div id="menuInfoForm1" class="menuForm">
+            <div id="menuInfoForm1" class="menuForm noselect">
               DISCLAIMER:<br />
               Every piece of data found here is available online.<br />
               Mostly from FBI website, which doesn't contain<br />
@@ -67,6 +67,15 @@ export default {
 </script>
 
 <style>
+.dg{
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+}
 .dg.main.taller-than-window .close-button {
   border-top: 1px solid rgb(144, 42, 42);
 }
@@ -269,4 +278,15 @@ th {
   bottom: 0;
   right: 0;
 }
+
+.noselect {
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome, Edge, Opera and Firefox */
+}
+
 </style>

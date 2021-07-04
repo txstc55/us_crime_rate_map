@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
+import { Mesh } from 'three';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 
@@ -79,6 +80,7 @@ class MapLoader {
         this.statePopulation["year"] = -1;
         this.stateToID = {};
         this.stateToID["NONE"] = [];
+        this.initialHeight = 150;
 
         // setup canvas and renderer
         this.canvas = canvas;
@@ -86,13 +88,10 @@ class MapLoader {
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x050d1a, 1);
         const scene = new THREE.Scene();
+        // var pickingRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+        // var pixelBuffer = new Uint8Array(4);
 
         // for rander labels
-        const labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.domElement.style.position = 'absolute';
-        labelRenderer.domElement.style.top = '0px';
-        document.body.appendChild(labelRenderer.domElement);
 
         // create camera
         const camera = new THREE.PerspectiveCamera(50, this.canvas.width / this.canvas.height, 1, 10000000);
@@ -102,7 +101,7 @@ class MapLoader {
         scene.add(camera);
 
         // orbit control for mouse interactions
-        const controls = new OrbitControls(camera, labelRenderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
         controls.minDistance = 20;
         controls.update();
 
@@ -120,7 +119,7 @@ class MapLoader {
         // extrude setting for creating mesh from 2d shape
         var extrudeSettings = {
             steps: 1,
-            depth: 150,
+            depth: this.initialHeight,
             bevelEnabled: false,
         };
 
@@ -150,19 +149,17 @@ class MapLoader {
                     mesh.rate = 0.0;
                     me.reset(mesh, true);
                     me.countyGroup.add(mesh);
-                    // console.log(me.stateToID);
+
+                    const bbox = new THREE.Box3().setFromObject(mesh);
+                    mesh.radiusAtLevel = Math.sqrt((bbox.max.x - bbox.min.x) ** 2 + ((bbox.max.y - bbox.min.y) ** 2)) / 2.0;
+                    mesh.radius = Math.sqrt(mesh.radiusAtLevel ** 2 + ((mesh.scale.z * me.initialHeight) ** 2) / 4);
+                    mesh.center = new THREE.Vector3((bbox.max.x + bbox.min.x) / 2, (bbox.max.y + bbox.min.y) / 2, (mesh.scale.z * me.initialHeight) / 2);
+
+                    // push the id for each state
                     if (!(mesh.state in me.stateToID)) {
-                        // console.log(me.stateToID);
                         me.stateToID[mesh.state] = [];
                     }
                     me.stateToID[mesh.state].push(mesh.id);
-
-                    // const wireframe = new THREE.WireframeGeometry(geometry);
-                    // const line = new THREE.LineSegments(wireframe);
-                    // line.material.depthTest = false;
-                    // line.material.opacity = 0.25;
-                    // line.material.transparent = true;
-                    // me.countyGroup.add(line);
                 }
             },
             // called when loading is in progresses
@@ -183,27 +180,9 @@ class MapLoader {
         scene.add(this.countyGroup);
         scene.add(this.labelGroup)
 
-        // for raycasting
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector3(1, 1, 0.5);
-        var mouseMoved = false;
-        document.addEventListener('mousemove', function (event) {
-            event.preventDefault();
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-            mouseMoved = true;
-        });
-
-        // div element that we will use for label
-        const labelDiv = document.createElement('h4');
-        labelDiv.setAttribute('style', 'white-space: pre; border: 5px; background-color: rgba(244, 180, 26, 0.8); color: #143D59; padding: 8px');
-        labelDiv.className = 'label';
-        var countyLabel = new CSS2DObject(labelDiv);
-        const countyLabelID = countyLabel.id;
-        scene.add(countyLabel);
-
         // prepare for animation
         this.step = 0; // for smooth transition, value range should be from 0 to 20
+        this.stopTraversing = false;
 
         // for gui control
         this.createGUI();
@@ -212,22 +191,64 @@ class MapLoader {
         this.previousIntersected = -1; // what the previous intersection is
         this.previousIntersectedState = "NONE";
 
+
+        // for raycasting
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector3(1, 1, 0.5);
+
+        // div element that we will use for label
+        const labelDiv = document.createElement('h4');
+        labelDiv.setAttribute('style', 'white-space: pre; border: 5px; background-color: rgba(244, 180, 26, 0.8); color: #143D59; padding: 8px; position: absolute');
+        labelDiv.className = 'noselect';
+        labelDiv.textContent = "labeldiv";
+        labelDiv.style.visibility = "hidden";
+        document.body.appendChild(labelDiv);
+
+
+
         // window resize
         window.addEventListener('resize', function () {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            labelRenderer.setSize(window.innerWidth, window.innerHeight);
-            controls.update();
+            // controls.update();
         });
 
-        function UnprojectMouse() {
-            var mouseVector = mouse;
+
+        function CheckIntersection(ray) {
+            var mouseVector = new THREE.Vector3().copy(mouse);
             mouseVector.unproject(camera);
-            const dir = mouseVector.sub(camera.position).normalize();
+            const dir = mouseVector.sub(camera.position).normalize(); // the is the negative direction though
             const distance = - camera.position.z / dir.z;
-            const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-            return pos
+            const pos = camera.position.clone().add(dir.multiplyScalar(distance)); // this is the unprojected mouse position where z is at 0;
+            var hitDistance = 999999999;
+            var closestID = -1;
+            me.countyGroup.traverse(function (child) {
+                if (child.isMesh) {
+                    // first check if larger sphere intersect
+                    const center = child.center;
+                    if ((pos.x - center.x) ** 2 + (pos.y - center.y) ** 2 < child.radius ** 2 * 4) {
+                        // check smaller sphere intersect
+                        var m = new THREE.Vector3();
+                        m.copy(camera.position);
+                        m = m.sub(center);
+                        const b = - (m.dot(dir));
+                        const c = m.dot(m) - child.radius ** 2;
+                        const discr = b ** 2 - c;
+                        if (discr >= 0) {
+                            // sphere intersection
+                            const intersection = ray.intersectObject(child, true);
+                            if (intersection.length > 0) {
+                                if (intersection[0].distance < hitDistance) {
+                                    hitDistance = intersection[0].distance;
+                                    closestID = intersection[0].object.id;
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            return closestID;
         }
 
         function CreateLabelDiv(obj) {
@@ -235,60 +256,52 @@ class MapLoader {
             me.previousIntersectedState = me.lastIntersectedState == obj.state ? "NONE" : me.lastIntersectedState;
             me.lastIntersected = obj.id;
             me.lastIntersectedState = obj.state;
-            labelDiv.textContent = "Year: " + me.controlParams["year"];
-            labelDiv.textContent += "\r\nCounty Name: " + obj.county;
-            labelDiv.textContent += "\r\nState: " + MapLoader.abbreviationToState[obj.state];
-            labelDiv.textContent += "\r\nPopulation: " + (obj.stats[0] != -1 ? obj.stats[0] : "Not Reported");
-            if (me.controlParams[0]) {
-                labelDiv.textContent += "\r\nState Population Density: " + (obj.stats[0] != -1 ? (obj.rate * 10 * 100).toFixed(2) + "%" : "Not Reported")
-            }
-            for (var j = 1; j < 9; j++) {
-                if (me.controlParams[j]) {
-                    labelDiv.textContent += "\r\n" + (MapLoader.statsString()[j]) + ": " + (obj.stats[j] != -1 ? obj.stats[j] : "Not Reported");
-                }
-            }
-            labelDiv.textContent += "\r\nCumulated Rate: " + (obj.rate * 100).toFixed(2) + "%";
-            const hw = MapLoader.getHeight(labelDiv);
-            labelDiv.style.marginTop = -(hw.h / 2 + 5) + "px";
-            labelDiv.style.marginLeft = (hw.w / 2 + 5) + "px";
+            labelDiv.textContent = obj.desc;
         }
+
+        var mouseMoved = false;
+        document.addEventListener('mousemove', function (event) {
+            // event.preventDefault();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            mouseMoved = true;
+            if (mouse.x >= 0) {
+                labelDiv.style.right = (window.innerWidth - event.clientX + 5) + 'px';
+                labelDiv.style.left = "";
+            } else {
+                labelDiv.style.right = ""
+                labelDiv.style.left = (event.clientX + 5) + "px";
+            }
+            labelDiv.style.top = (event.clientY + 5) + 'px';
+            labelDiv.style.bottom = "";
+
+
+        });
 
         this.animate = function () {
             requestAnimationFrame(me.animate);
             controls.update();
-
-            // only do raycasting when mouse moved
             if (mouseMoved) {
                 raycaster.setFromCamera(mouse, camera);
-                const intersections = raycaster.intersectObjects(me.countyGroup.children);
-                if (intersections.length == 0) {
+                const intersectID = CheckIntersection(raycaster);
+                if (intersectID == -1) {
                     me.previousIntersected = me.lastIntersected;
                     me.previousIntersectedState = me.lastIntersectedState;
                     me.lastIntersected = -1;
                     me.lastIntersectedState = "NONE";
-                    scene.getObjectById(countyLabelID, true).visible = false;
-                }
-                for (var i = 0; i < intersections.length; i++) {
-                    if (intersections[i].object.isMesh) {
-                        scene.getObjectById(countyLabelID, true).visible = true;
-                        if (intersections[i].object.id != me.lastIntersected) {
-                            // change the label content
-                            CreateLabelDiv(intersections[i].object)
-                        }
-
-                        countyLabel = new CSS2DObject(labelDiv);
-                        // make the label follow mouse
-                        scene.getObjectById(countyLabelID, true).position.copy(UnprojectMouse());
-                        break;
+                    labelDiv.style.visibility = "hidden";
+                } else {
+                    const obj = scene.getObjectById(intersectID);
+                    if (obj.isMesh && intersectID != me.lastIntersected) {
+                        CreateLabelDiv(obj);
                     }
+                    labelDiv.style.visibility = "visible";
                 }
                 mouseMoved = false;
-                labelRenderer.render(scene, camera);
             }
             me.changeHeightAndColor();
             renderer.render(scene, camera);
         };
-
         this.animate();
     }
 
@@ -304,19 +317,30 @@ class MapLoader {
             }
         });
         this.step = 0;
+        this.stopTraversing = false;
     }
 
     // to change the color and height of the bar, note there is a step size of 20 to reach the final height just for smooth transition
     changeHeightAndColor() {
         const pi20 = Math.PI / 20;
         let me = this;
-        this.countyGroup.traverse(function (child) {
-            if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
-                child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
-                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                child.material.color = color;
-            }
-        });
+        var allClear = true;
+        if (!this.stopTraversing) {
+            this.countyGroup.traverse(function (child) {
+                if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
+                    child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
+                    const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                    child.material.color = color;
+                    child.radius = Math.sqrt(child.radiusAtLevel ** 2 + ((child.scale.z * me.initialHeight) ** 2) / 4);
+                    child.center.z = (child.scale.z * me.initialHeight) / 2;
+                    allClear = false;
+                }
+            });
+        }
+
+        if (allClear && this.countyGroup.children.length > 0) {
+            this.stopTraversing = true;
+        }
 
         // change color of the current state
         for (const id of this.stateToID[this.lastIntersectedState]) {
@@ -434,12 +458,23 @@ class MapLoader {
     reset(mesh, fileChange) {
         if (fileChange) {
             mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
+            mesh.allTexts = ["Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available"]
+
             mesh.targetHeight = 0.000001;
             mesh.deltaHeight = 0.0;
             if (mesh.state in this.crimeInfo && mesh.county in this.crimeInfo[mesh.state]) {
                 const info = this.crimeInfo[mesh.state][mesh.county];
                 for (var i = 0; i < 9; i++) {
                     mesh.stats[i] = info[i];
+                }
+            }
+            mesh.baseTexts = "Year: " + this.controlParams["year"];
+            mesh.baseTexts += "\r\nCounty Name: " + mesh.county;
+            mesh.baseTexts += "\r\nState: " + MapLoader.abbreviationToState[mesh.state];
+            mesh.baseTexts += "\r\nPopulation: " + (mesh.stats[0] != -1 ? mesh.stats[0] : "Not Available");
+            for (var j = 1; j < 9; j++) {
+                if (this.controlParams[j]) {
+                    mesh.allTexts[j] = "\r\n" + (MapLoader.statsString()[j]) + ": " + (mesh.stats[j] != -1 ? mesh.stats[j] : "Not Available");
                 }
             }
         }
@@ -456,16 +491,30 @@ class MapLoader {
         } else {
             mesh.rate = mesh.stats[0] * 1.0 / this.statePopulation[mesh.state] / 10.0;
         }
+
+        mesh.desc = mesh.baseTexts;
+        for (var i = 1; i < 9; i++) {
+            if (this.controlParams[i]) {
+                mesh.desc += mesh.allTexts[i];
+            }
+        }
+        if (!this.controlParams[0]) {
+            mesh.desc += "\r\nCumulated Rate: " + (mesh.rate * 100).toFixed(2) + "%";
+        } else {
+            mesh.desc += "\r\nState Population Density: " + (mesh.stats[0] != -1 ? (mesh.rate * 10 * 100).toFixed(2) + "%" : "Not Available");
+        }
+
+
         mesh.targetHeight = Math.max(0.00001, mesh.rate * 20.0); // how high it should be, from 0 to 1
         mesh.deltaHeight = mesh.rate - mesh.scale.z / 20.0; // the amount of change for smooth transition
     }
 
     calculatePopulationForState() {
         if (this.controlParams["year"] != this.statePopulation["year"]) {
-            for (var st in this.crimeInfo) {
+            for (const st in this.crimeInfo) {
                 var pop = 0;
                 this.statePopulation[st] = 0;
-                for (var ct in this.crimeInfo[st]) {
+                for (const ct in this.crimeInfo[st]) {
                     pop += this.crimeInfo[st][ct][0] != -1 ? this.crimeInfo[st][ct][0] : 0;
                 }
                 this.statePopulation[st] = pop;
