@@ -77,10 +77,12 @@ class MapLoader {
         this.lastViewedYear = 2018;
         this.statePopulation = {};
         this.statePopulation["year"] = -1;
+        this.stateToID = {};
+        this.stateToID["NONE"] = [];
 
         // setup canvas and renderer
         this.canvas = canvas;
-        const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, powerPreference: "high-performance", antialias: true });
+        const renderer = new THREE.WebGLRenderer({ canvas: this.canvas });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x050d1a, 1);
         const scene = new THREE.Scene();
@@ -148,6 +150,12 @@ class MapLoader {
                     mesh.rate = 0.0;
                     me.reset(mesh, true);
                     me.countyGroup.add(mesh);
+                    // console.log(me.stateToID);
+                    if (!(mesh.state in me.stateToID)) {
+                        // console.log(me.stateToID);
+                        me.stateToID[mesh.state] = [];
+                    }
+                    me.stateToID[mesh.state].push(mesh.id);
 
                     // const wireframe = new THREE.WireframeGeometry(geometry);
                     // const line = new THREE.LineSegments(wireframe);
@@ -190,17 +198,19 @@ class MapLoader {
         const labelDiv = document.createElement('h4');
         labelDiv.setAttribute('style', 'white-space: pre; border: 5px; background-color: rgba(244, 180, 26, 0.8); color: #143D59; padding: 8px');
         labelDiv.className = 'label';
+        var countyLabel = new CSS2DObject(labelDiv);
+        const countyLabelID = countyLabel.id;
+        scene.add(countyLabel);
 
         // prepare for animation
         this.step = 0; // for smooth transition, value range should be from 0 to 20
 
-
         // for gui control
         this.createGUI();
         this.lastIntersected = -1; // what we are intersecting now
-        this.lastIntersectedState = -1;
+        this.lastIntersectedState = "NONE";
         this.previousIntersected = -1; // what the previous intersection is
-        this.previousIntersectedState = -1;
+        this.previousIntersectedState = "NONE";
 
         // window resize
         window.addEventListener('resize', function () {
@@ -211,6 +221,38 @@ class MapLoader {
             controls.update();
         });
 
+        function UnprojectMouse() {
+            var mouseVector = mouse;
+            mouseVector.unproject(camera);
+            const dir = mouseVector.sub(camera.position).normalize();
+            const distance = - camera.position.z / dir.z;
+            const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+            return pos
+        }
+
+        function CreateLabelDiv(obj) {
+            me.previousIntersected = me.lastIntersected;
+            me.previousIntersectedState = me.lastIntersectedState == obj.state ? "NONE" : me.lastIntersectedState;
+            me.lastIntersected = obj.id;
+            me.lastIntersectedState = obj.state;
+            labelDiv.textContent = "Year: " + me.controlParams["year"];
+            labelDiv.textContent += "\r\nCounty Name: " + obj.county;
+            labelDiv.textContent += "\r\nState: " + MapLoader.abbreviationToState[obj.state];
+            labelDiv.textContent += "\r\nPopulation: " + (obj.stats[0] != -1 ? obj.stats[0] : "Not Reported");
+            if (me.controlParams[0]) {
+                labelDiv.textContent += "\r\nState Population Density: " + (obj.stats[0] != -1 ? (obj.rate * 10 * 100).toFixed(2) + "%" : "Not Reported")
+            }
+            for (var j = 1; j < 9; j++) {
+                if (me.controlParams[j]) {
+                    labelDiv.textContent += "\r\n" + (MapLoader.statsString()[j]) + ": " + (obj.stats[j] != -1 ? obj.stats[j] : "Not Reported");
+                }
+            }
+            labelDiv.textContent += "\r\nCumulated Rate: " + (obj.rate * 100).toFixed(2) + "%";
+            const hw = MapLoader.getHeight(labelDiv);
+            labelDiv.style.marginTop = -(hw.h / 2 + 5) + "px";
+            labelDiv.style.marginLeft = (hw.w / 2 + 5) + "px";
+        }
+
         this.animate = function () {
             requestAnimationFrame(me.animate);
             controls.update();
@@ -220,51 +262,23 @@ class MapLoader {
                 raycaster.setFromCamera(mouse, camera);
                 const intersections = raycaster.intersectObjects(me.countyGroup.children);
                 if (intersections.length == 0) {
-                    me.labelGroup.remove(...me.labelGroup.children);
                     me.previousIntersected = me.lastIntersected;
                     me.previousIntersectedState = me.lastIntersectedState;
                     me.lastIntersected = -1;
-                    me.lastIntersectedState = -1;
+                    me.lastIntersectedState = "NONE";
+                    scene.getObjectById(countyLabelID, true).visible = false;
                 }
                 for (var i = 0; i < intersections.length; i++) {
                     if (intersections[i].object.isMesh) {
+                        scene.getObjectById(countyLabelID, true).visible = true;
                         if (intersections[i].object.id != me.lastIntersected) {
                             // change the label content
-                            const obj = intersections[i].object;
-                            me.previousIntersected = me.lastIntersected;
-                            me.previousIntersectedState = me.lastIntersectedState;
-                            me.lastIntersected = obj.id;
-                            me.lastIntersectedState = obj.state;
-                            labelDiv.textContent = "Year: " + me.controlParams["year"];
-                            labelDiv.textContent += "\r\nCounty Name: " + obj.county;
-                            labelDiv.textContent += "\r\nState: " + MapLoader.abbreviationToState[obj.state];
-                            labelDiv.textContent += "\r\nPopulation: " + (obj.stats[0] != -1 ? obj.stats[0] : "Not Reported");
-                            if (me.controlParams[0]) {
-                                labelDiv.textContent += "\r\nState Population Density: " + (obj.stats[0] != -1 ? (obj.rate * 10 * 100).toFixed(2) + "%" : "Not Reported")
-                            }
-                            for (var j = 1; j < 9; j++) {
-                                if (me.controlParams[j]) {
-                                    labelDiv.textContent += "\r\n" + (MapLoader.statsString()[j]) + ": " + (obj.stats[j] != -1 ? obj.stats[j] : "Not Reported");
-                                }
-                            }
-                            labelDiv.textContent += "\r\nCumulated Rate: " + (obj.rate * 100).toFixed(2) + "%";
-                            const hw = MapLoader.getHeight(labelDiv);
-                            labelDiv.style.marginTop = -(hw.h / 2 + 5) + "px";
-                            labelDiv.style.marginLeft = (hw.w / 2 + 5) + "px";
+                            CreateLabelDiv(intersections[i].object)
                         }
 
-                        me.labelGroup.remove(...me.labelGroup.children);
-                        const countyLabel = new CSS2DObject(labelDiv);
+                        countyLabel = new CSS2DObject(labelDiv);
                         // make the label follow mouse
-                        var mouseVector = mouse;
-                        mouseVector.unproject(camera);
-                        var dir = mouseVector.sub(camera.position).normalize();
-                        var distance = - camera.position.z / dir.z;
-                        var pos = camera.position.clone().add(dir.multiplyScalar(distance));
-                        countyLabel.position.copy(pos);
-
-                        me.labelGroup.add(countyLabel);
-
+                        scene.getObjectById(countyLabelID, true).position.copy(UnprojectMouse());
                         break;
                     }
                 }
@@ -274,6 +288,7 @@ class MapLoader {
             me.changeHeightAndColor();
             renderer.render(scene, camera);
         };
+
         this.animate();
     }
 
@@ -295,43 +310,56 @@ class MapLoader {
     changeHeightAndColor() {
         const pi20 = Math.PI / 20;
         let me = this;
-        var clearPreviousState = false;
         this.countyGroup.traverse(function (child) {
             if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
                 child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
                 const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
                 child.material.color = color;
             }
-            if (child.id == me.lastIntersected) {
-                var color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                // console.log(color);
-                const factor = Math.sin(pi20 * (me.step));
-                color.r = Math.min(1.0, color.r * (1 + factor / 2));
-                color.g = Math.min(1.0, color.g * (1 + factor / 2));
-                color.b = Math.min(1.0, color.b * (1 + factor / 2));
-                // console.log(color);
-                child.material.color = color;
-            } else if (child.id == me.previousIntersected) {
-                me.previousIntersected = -1;
-                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                child.material.color = color;
-            } else if (child.state == me.lastIntersectedState) {
-                var color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                const factor = Math.sin(pi20 * (me.step + 10));
-                color.r = Math.min(1.0, color.r * (1 + factor / 3));
-                color.g = Math.min(1.0, color.g * (1 + factor / 3));
-                color.b = Math.min(1.0, color.b * (1 + factor / 3));
-                child.material.color = color;
-            } else if (child.state == me.previousIntersectedState) {
-                clearPreviousState = true;
-                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                child.material.color = color;
-            }
         });
-        this.step += 1;
-        if (clearPreviousState) {
-            this.previousIntersectedState = -1;
+
+        // change color of the current state
+        for (const id of this.stateToID[this.lastIntersectedState]) {
+            const obj = this.countyGroup.getObjectById(id);
+            var color = new THREE.Color(MapLoader.colorGradient(obj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+            const factor = Math.sin(pi20 * (me.step + 10));
+            color.r = Math.min(1.0, color.r * (1 + factor / 3));
+            color.g = Math.min(1.0, color.g * (1 + factor / 3));
+            color.b = Math.min(1.0, color.b * (1 + factor / 3));
+            obj.material.color = color;
         }
+
+        // stop changing color of the last state
+        for (const id of this.stateToID[this.previousIntersectedState]) {
+            const obj = this.countyGroup.getObjectById(id);
+            if (obj.isMesh) {
+                const color = new THREE.Color(MapLoader.colorGradient(obj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                obj.material.color = color;
+            }
+        }
+
+        // highlight the current obj
+        if (this.lastIntersected != -1) {
+            const currentObj = this.countyGroup.getObjectById(this.lastIntersected);
+            var color = new THREE.Color(MapLoader.colorGradient(currentObj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+            const factor = Math.sin(pi20 * (me.step));
+            color.r = Math.min(1.0, color.r * (1 + factor / 2));
+            color.g = Math.min(1.0, color.g * (1 + factor / 2));
+            color.b = Math.min(1.0, color.b * (1 + factor / 2));
+            currentObj.material.color = color;
+        }
+
+
+        // stop highlighting the previous obj
+        if (this.previousIntersected != -1) {
+            const prevObj = this.countyGroup.getObjectById(this.previousIntersected);
+            this.previousIntersected = -1;
+            const color = new THREE.Color(MapLoader.colorGradient(prevObj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+            prevObj.material.color = color;
+        }
+
+        this.step += 1;
+        this.previousIntersectedState = "NONE";
     }
 
     static colorGradient(fadeFraction, rgbColor1, rgbColor2, rgbColor3) {
