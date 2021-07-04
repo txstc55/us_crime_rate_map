@@ -2,13 +2,32 @@
   <div>
     <div class="canvas-wrapper">
       <canvas class="canvas" ref="myCanvas" />
+      <div id="menuInfo">
+        <div id="menuInfoWrapper" class="menuWrapper">
+          <div id="menuInfoFormDiv">
+            <div id="menuInfoForm1" class="menuForm">
+              DISCLAIMER:<br />
+              Every piece of data found here is available online.<br />
+              Mostly from FBI website, which doesn't contain<br />
+              all the crime stats from every state.<br />
+              The map shown here is by no means for any ranking<br /><br />
+              There is a scaling factor for the height,<br />
+              which is different for population density and crime rate<br />
+              The scaling factor is there so the map won't be too flat<br /><br />
+              Find a bug?<br />
+              Contact me @ TXSTC55[at]gmail[dot]com<br />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-var canvasBgColor = { r: 0, g: 0, b: 0, a: 1 };
-import MapLoader from "../scripts/MapLoader.js"
+var canvasBgColor = { r: 196, g: 238, b: 142, a: 1 };
+import MapLoader from "../scripts/MapLoader.js";
+const countyOrder = require("../assets/countyOrder.json");
 export default {
   name: "MatrixViewer",
   data() {
@@ -17,6 +36,9 @@ export default {
       canvasBgColor,
       ml: null,
     };
+  },
+
+  methods: {
   },
 
   mounted() {
@@ -30,102 +52,219 @@ export default {
         });
       }
     }
-    // set the initial background color
-    this.$refs.myCanvas.style.backgroundColor =
-      "rgba(" +
-      this.canvasBgColor.r +
-      ", " +
-      this.canvasBgColor.g +
-      ", " +
-      this.canvasBgColor.b +
-      ", " +
-      1 +
-      ")";
 
     this.canvas = this.$refs.myCanvas;
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
-    this.ml = new MapLoader(this.canvas);
+
+    this.ml = new MapLoader(
+      this.canvas,
+      "Usa_counties_large.svg",
+      countyOrder["order"]
+    );
   },
 };
 </script>
 
 <style>
-div.selection-container {
-  background-color: rgba(23, 27, 44, 0.3);
-  max-width: 100vw;
-  width: 100vw;
+.dg.main.taller-than-window .close-button {
+  border-top: 1px solid rgb(144, 42, 42);
 }
 
-.control-label {
-  width: 40%;
-  float: top;
-  display: table-row;
-  font-size: 11px;
-  color: #4fccc2;
+canvas {
+  position: absolute;
+}
+
+.dg.main .close-button {
+  background-color: #2b3252;
+  color: #fad744;
   font-weight: bold;
-  margin-bottom: -5px;
 }
 
-.label-text {
-  color: #4fccc2;
+.dg.main .close-button:hover {
+  background-color: #fad744;
+  color: #2b3252;
   font-weight: bold;
-  margin-top: -1px;
 }
 
-.label-name {
-  float: left;
-  text-align: left;
+.dg {
+  color: #fad744;
+  text-shadow: none !important;
 }
 
-.label-value {
-  display: block;
-  float: right;
-  text-align: right;
+.dg.main::-webkit-scrollbar {
+  background: #fafafa;
 }
 
-#text-area-label {
-  width: 100%;
-  float: top;
-  display: table-row;
+.dg.main::-webkit-scrollbar-thumb {
+  background: #bbb;
+}
+
+.dg li:not(.folder) {
+  background: #2b3252;
+  border-bottom: 1px solid rgb(47, 104, 126);
+}
+
+.dg li.save-row .button {
+  text-shadow: none !important;
+}
+
+.dg li.title {
+  background: #2b3252 6px 10px no-repeat;
+  color: #fad744;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.dg .cr.boolean {
+  background: #2d4157;
+  color: #fad744;
   font-size: 12px;
-  color: #4fccc2;
-  font-weight: bold;
+  white-space: nowrap;
+  /* position: absolute; */
+}
+
+.dg .cr.function:hover,
+.dg .cr.boolean:hover {
+  background: rgb(134, 35, 88);
+}
+
+.dg .cr.number input[type="text"] {
+  color: #fad744;
+  /* text-align: center; */
+}
+
+.dg .c input[type="text"] {
+  background: #354f81;
+  font-size: 13px;
+  color: #fad744;
+  text-align: center;
+  padding-top: -20px;
+}
+
+.dg .c input[type="text"]:hover {
+  background: #2e4570;
+}
+
+.dg .c input[type="text"]:focus {
+  background: rgb(34, 30, 90);
+  color: #fad744;
+}
+
+.dg .c input[type="checkbox"] {
+  float: right;
+  /* display: inline-block */
+}
+
+.dg .c .slider {
+  background: #e9e9e9;
+}
+
+.dg .c .slider-fg {
+  background: #68ecd6;
+}
+
+.dg .c {
+}
+
+.dg .c .slider:hover {
+  background: #eee;
+}
+
+/* removes the top and left whitespace */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+/* ensure full screen */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 95%;
+}
+
+#menuCtrl {
+  position: absolute;
+  margin: 5px;
+}
+
+#menuInfo {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  margin: 5px;
+}
+
+.menuWrapper {
+}
+
+.menuForm {
   float: left;
+  margin-top: 22px;
+  padding: 5px;
+  background-color: rgba(54, 69, 110, 0.657);
+  border: 2px solid black;
+  border-radius: 10px;
+  border-top-left-radius: 0;
+  box-shadow: 3px 3px 5px #333;
+  color: #F4af1b;
+  font-weight: bold
+}
+
+.menuForm table {
+  padding-top: 3px;
+}
+.menuForm td,
+th {
+  white-space: nowrap;
+}
+.menuForm th {
   text-align: left;
 }
 
-.v-btn__content {
-  width: 100%;
-  white-space: normal;
+.menuTabs {
+  position: absolute;
+  white-space: nowrap;
+  top: 0;
 }
 
-.output-button .v-btn__content {
-  color: #182750;
-}
-∂ .abort-button .v-btn__content {
-  color: #ffffff;
-  font-weight: bold;
-}
-
-.output-button .v-btn--disabled.v-btn__content {
-  color: #b9e4a6;
-}
-
-.canvas-wrapper {
-  overflow: auto;
-  /* max-height: 100%;
-  height: 100%;
-  max-width: 100%; */
-  position: relative;
+.menuTabs div.tab {
+  float: left;
+  height: 20px;
+  min-width: 20px;
+  margin: 0;
+  padding: 0 5px 0 5px;
   text-align: center;
+  background-color: white;
+  border: 2px solid black;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+.menuTabs div.secondary {
+  border-left: 0px;
+}
+.menuTabs div.active {
+  opacity: 1;
+  border-bottom: 2px solid white;
+}
+.menuTabs div.active.showHide {
+  border-bottom: 2px solid black;
+}
+.menuTabs div.inActive {
+  opacity: 0.75;
+  border-bottom: 2px solid black;
 }
 
-#myCanvas {
-  padding-left: 0;
-  padding-right: 0;
-  margin-left: auto;
-  margin-right: auto;
-  display: inline-block;
+.hidden {
+  display: none;
+}
+#menuInfoWrapper.hidden {
+  display: block;
+}
+#menuInfoWrapper.hidden #menuInfoTabs {
+  top: auto;
+  bottom: 0;
+  right: 0;
 }
 </style>

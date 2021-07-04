@@ -1,79 +1,152 @@
 const THREE = require("three")
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
-import { RectAreaLightHelper } from 'three/examples/jsm/helpers/RectAreaLightHelper.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+
+import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
+// import Stats from 'three/examples/jsm/libs/stats.module.js';
+
+
+
 class MapLoader {
-    constructor(canvas) {
+    static get highColor() {
+        return {
+            red: 246,
+            green: 15,
+            blue: 15
+        }
+    };
+    static get mediumColor() {
+        return {
+            red: 236,
+            green: 172,
+            blue: 70
+        };
+    };
+    static get lowColor() {
+        return {
+            red: 95,
+            green: 251,
+            blue: 181
+        };
+    };
+
+    static get abbreviationToState() {
+        return { "AL": "Alabama", "AK": "Alaska", "AS": "American Samoa", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District Of Columbia", "FM": "Federated States Of Micronesia", "FL": "Florida", "GA": "Georgia", "GU": "Guam", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MH": "Marshall Islands", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "MP": "Northern Mariana Islands", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PW": "Palau", "PA": "Pennsylvania", "PR": "Puerto Rico", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VI": "Virgin Islands", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming" };
+    };
+
+    static statsIndex() {
+        return {
+            Population: 0,
+            Murder: 1,
+            Rape: 2,
+            Robbery: 3,
+            Aggravated: 4,
+            Burglary: 5,
+            Larceny: 6,
+            Motor: 7,
+            Arson: 8
+        }
+    }
+
+    static statsString() {
+        return ["Population", "Murder and Nonnegligent Manslaughter", "Rape", "Robbery", "Aggravated Assault", "Burglary", "Larceny-theft", "Motor Vehicle Theft", "Arson"];
+    }
+
+
+
+
+
+    constructor(canvas, svgName, countyInfo) {
+        this.crimeInfo = require("../assets/2018.json");
+
+        // check statsIndex for more
+        this.controlParams = {
+            year: 2018,
+            threeD: true,
+            0: false,
+            1: true,
+            2: true,
+            3: true,
+            4: true,
+            5: true,
+            6: true,
+            7: true,
+            8: true
+        };
+        this.lastViewedYear = 2018;
+        this.statePopulation = {};
+        this.statePopulation["year"] = -1;
+
+        // setup canvas and renderer
         this.canvas = canvas;
-        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true });
-        this.renderer.setSize(this.canvas.width, this.canvas.height);
-        this.scene = new THREE.Scene();
+        const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, powerPreference: "high-performance", antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x050d1a, 1);
+        const scene = new THREE.Scene();
 
+        // for rander labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        document.body.appendChild(labelRenderer.domElement);
 
-        this.camera = new THREE.PerspectiveCamera(50, this.canvas.width / this.canvas.height, 1, 1000);
-        this.camera.position.x = 0
-        this.camera.position.y = 0
-        this.camera.position.z = 200
-        this.scene.add(this.camera);
+        // create camera
+        const camera = new THREE.PerspectiveCamera(50, this.canvas.width / this.canvas.height, 1, 10000000);
+        camera.position.x = 0
+        camera.position.y = 0
+        camera.position.z = 200
+        scene.add(camera);
 
-        const controls = new OrbitControls(this.camera, this.renderer.domElement);
+        // orbit control for mouse interactions
+        const controls = new OrbitControls(camera, labelRenderer.domElement);
+        controls.minDistance = 20;
         controls.update();
 
 
-
-        const svgLoader = new SVGLoader();
+        // county group for all the counties collectively
         this.countyGroup = new THREE.Group();
-        let me = this;
-        const highColor = {
-            red: 255,
-            green: 19,
-            blue: 80
-        };
-        const mediumColor = {
-            red: 147,
-            green: 78,
-            blue: 178
-        };
-        const lowColor = {
-            red: 148,
-            green: 215,
-            blue: 252
-        };
+        this.countyGroup.scale.multiplyScalar(0.25);
+        this.countyGroup.position.x = -120;
+        this.countyGroup.position.y = 80;
+        this.countyGroup.scale.y *= - 1;
 
-        this.countyShapes = [];
+        // label group just because
+        this.labelGroup = new THREE.Group();
 
+        // extrude setting for creating mesh from 2d shape
         var extrudeSettings = {
             steps: 1,
-            depth: 5,
+            depth: 200,
             bevelEnabled: false,
         };
 
+        // load map svg
+        var svgLoader = new SVGLoader();
+        let me = this;
         svgLoader.load(
-            './Usa_counties_large.svg',
+            svgName,
             function (data) {
-                // console.log(data);
                 const paths = data.paths;
-                // console.log(paths);
-                me.countyGroup.scale.multiplyScalar(0.25);
-                me.countyGroup.position.x = -120;
-                me.countyGroup.position.y = 80;
-                me.countyGroup.scale.y *= - 1;
-
                 for (let i = 0; i < paths.length; i++) {
-                    const crimeColor = me.colorGradient(0.0, lowColor, mediumColor, highColor);
+                    const crimeColor = MapLoader.colorGradient(0.00001, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor);
                     const path = paths[i];
                     const material = new THREE.MeshBasicMaterial({
                         color: new THREE.Color(crimeColor),
                     });
 
                     const shapes = SVGLoader.createShapes(path);
-                    me.countyShapes.push(shapes);
-                    extrudeSettings.depth = 100;
-                    const geometry = new THREE.ExtrudeGeometry(shapes, extrudeSettings);
+                    const geometry = new THREE.ExtrudeBufferGeometry(shapes, extrudeSettings);
+                    // geometry.computeBoundsTree();
                     const mesh = new THREE.Mesh(geometry, material);
-                    mesh.id2 = i;
-                    mesh.changeFactor = 0.0;
-                    mesh.scale.z = 0.0;
+                    mesh.scale.z = 0.00001;
+                    mesh.county = countyInfo[i][1];
+                    mesh.state = countyInfo[i][0];
+                    mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
+                    mesh.rate = 0.0;
+                    me.reset(mesh, true);
+
                     me.countyGroup.add(mesh);
                 }
             },
@@ -85,46 +158,184 @@ class MapLoader {
             function (error) {
                 console.log(error)
                 console.log('An error happened');
-
             }
         )
 
-        this.scene.add(this.countyGroup);
-        // console.log(this.countyGroup);
-        var c = 0;
+        // delete the svg loader now
+        svgLoader = null;
+
+        // add the group to the scene
+        scene.add(this.countyGroup);
+        scene.add(this.labelGroup)
+
+        // for raycasting
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector3(1, 1, 0.5);
+        var mouseMoved = false;
+        document.addEventListener('mousemove', function (event) {
+            event.preventDefault();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            mouseMoved = true;
+        });
+
+        // div element that we will use for label
+        const labelDiv = document.createElement('h4');
+        labelDiv.setAttribute('style', 'white-space: pre; border: 5px; background-color: rgba(244, 180, 26, 0.8); color: #143D59; padding: 8px');
+        labelDiv.className = 'label';
+
+        // prepare for animation
+        this.step = 0; // for smooth transition, value range should be from 0 to 20
+
+
+        // for gui control
+        this.createGUI();
+        this.lastIntersected = -1; // what we are intersecting now
+        this.lastIntersectedState = -1;
+        this.previousIntersected = -1; // what the previous intersection is
+        this.previousIntersectedState = -1;
+
+        // window resize
+        window.addEventListener('resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            controls.update();
+        });
+
         this.animate = function () {
             requestAnimationFrame(me.animate);
             controls.update();
-            me.renderer.render(me.scene, me.camera);
-            // console.log( me.renderer.info.render.triangles );
-            // console.log(123);
-            if (c % 60 == 0) {
-                c = 0;
-                const r = Math.random() * 4527;
-                me.countyGroup.traverse(function (child) {
-                    if (child.isMesh) {
-                        const randomNumber = (child.id2 * r % 100) / 100;
-                        child.changeFactor = (randomNumber - child.scale.z) / 20.0;
-                        // child.scale.set(1, 1, randomNumber);
-                        child.material.color = new THREE.Color(me.colorGradient(child.scale.z, lowColor, mediumColor, highColor));
+
+            // only do raycasting when mouse moved
+            if (mouseMoved) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersections = raycaster.intersectObjects(me.countyGroup.children);
+                if (intersections.length == 0) {
+                    me.labelGroup.remove(...me.labelGroup.children);
+                    me.previousIntersected = me.lastIntersected;
+                    me.previousIntersectedState = me.lastIntersectedState;
+                    me.lastIntersected = -1;
+                    me.lastIntersectedState = -1;
+                }
+                for (var i = 0; i < intersections.length; i++) {
+                    if (intersections[i].object.isMesh) {
+                        if (intersections[i].object.id != me.lastIntersected) {
+                            // change the label content
+                            const obj = intersections[i].object;
+                            me.previousIntersected = me.lastIntersected;
+                            me.previousIntersectedState = me.lastIntersectedState;
+                            me.lastIntersected = obj.id;
+                            me.lastIntersectedState = obj.state;
+                            labelDiv.textContent = "Year: " + me.controlParams["year"];
+                            labelDiv.textContent += "\r\nCounty Name: " + obj.county;
+                            labelDiv.textContent += "\r\nState: " + MapLoader.abbreviationToState[obj.state];
+                            labelDiv.textContent += "\r\nPopulation: " + (obj.stats[0] != -1 ? obj.stats[0] : "Not Reported");
+                            if (me.controlParams[0]) {
+                                labelDiv.textContent += "\r\nState Population Density: " + (obj.stats[0] != -1 ? (obj.rate * 10 * 100).toFixed(2) + "%" : "Not Reported")
+                            }
+                            for (var j = 1; j < 9; j++) {
+                                if (me.controlParams[j]) {
+                                    labelDiv.textContent += "\r\n" + (MapLoader.statsString()[j]) + ": " + (obj.stats[j] != -1 ? obj.stats[j] : "Not Reported");
+                                }
+                            }
+                            labelDiv.textContent += "\r\nCumulated Rate: " + (obj.rate * 100).toFixed(2) + "%";
+                            const hw = MapLoader.getHeight(labelDiv);
+                            labelDiv.style.marginTop = -(hw.h / 2 + 5) + "px";
+                            labelDiv.style.marginLeft = (hw.w / 2 + 5) + "px";
+                        }
+
+                        me.labelGroup.remove(...me.labelGroup.children);
+                        const countyLabel = new CSS2DObject(labelDiv);
+                        // make the label follow mouse
+                        var mouseVector = mouse;
+                        mouseVector.unproject(camera);
+                        var dir = mouseVector.sub(camera.position).normalize();
+                        var distance = - camera.position.z / dir.z;
+                        var pos = camera.position.clone().add(dir.multiplyScalar(distance));
+                        countyLabel.position.copy(pos);
+
+                        me.labelGroup.add(countyLabel);
+
+                        break;
                     }
-                })
-            } else if (c % 60 <= 20) {
-                me.countyGroup.traverse(function (child) {
-                    if (child.isMesh) {
-                        child.scale.set(1, 1, child.scale.z + child.changeFactor);
-                        child.material.color = new THREE.Color(me.colorGradient(child.scale.z, lowColor, mediumColor, highColor));
-                    }
-                })
+                }
+                mouseMoved = false;
             }
-            c += 1;
+            me.changeHeightAndColor();
+
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+
         };
         this.animate();
-
     }
 
+    // initiate the height change by assigning heights to each bar
+    initiateHeightChange(fileChange) {
+        let me = this;
+        if (this.controlParams[0]) {
+            this.calculatePopulationForState();
+        }
+        this.countyGroup.traverse(function (child) {
+            if (child.isMesh) {
+                me.reset(child, fileChange)
+            }
+        });
+        this.step = 0;
+    }
 
-    colorGradient(fadeFraction, rgbColor1, rgbColor2, rgbColor3) {
+    // to change the color and height of the bar, note there is a step size of 20 to reach the final height just for smooth transition
+    changeHeightAndColor() {
+        const pi20 = Math.PI / 20;
+        let me = this;
+        var clearPreviousState = false;
+        this.countyGroup.traverse(function (child) {
+            if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
+                child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
+                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                child.material.color = color;
+            }
+            if (child.id == me.lastIntersected) {
+                var color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                // console.log(color);
+                const factor = Math.sin(pi20 * (me.step));
+                color.r = Math.min(1.0, color.r * (1 + factor / 2));
+                color.g = Math.min(1.0, color.g * (1 + factor / 2));
+                color.b = Math.min(1.0, color.b * (1 + factor / 2));
+                // console.log(color);
+                child.material.color = color;
+            } else if (child.id == me.previousIntersected) {
+                me.previousIntersected = -1;
+                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                child.material.color = color;
+            } else if (child.state == me.lastIntersectedState) {
+                var color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                const factor = Math.sin(pi20 * (me.step + 10));
+                color.r = Math.min(1.0, color.r * (1 + factor / 3));
+                color.g = Math.min(1.0, color.g * (1 + factor / 3));
+                color.b = Math.min(1.0, color.b * (1 + factor / 3));
+                child.material.color = color;
+            } else if (child.state == me.previousIntersectedState) {
+                clearPreviousState = true;
+                const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
+                child.material.color = color;
+            }
+        });
+        this.step += 1;
+        if (clearPreviousState) {
+            this.previousIntersectedState = -1;
+        }
+    }
+
+    static colorGradient(fadeFraction, rgbColor1, rgbColor2, rgbColor3) {
+        if (fadeFraction > 1.0) {
+            // console.log(fadeFraction)
+            fadeFraction = 1.0;
+        } else if (fadeFraction < 0) {
+            fadeFraction = 0.0;
+        }
         var color1 = rgbColor1;
         var color2 = rgbColor2;
         var fade = fadeFraction;
@@ -153,6 +364,94 @@ class MapLoader {
 
         return 'rgb(' + gradient.red + ',' + gradient.green + ',' + gradient.blue + ')';
     }
+
+    createGUI() {
+        let me = this;
+        const gui = new GUI({ width: 550 });
+        gui.add(this.controlParams, 'year', 2013, 2018).step(1).name("Year").onChange(function () { me.readYear(me.controlParams.year) });
+        gui.add(this.controlParams, '0').name("Population Density").onChange(function () { me.initiateHeightChange(false) });
+        const v_crime = gui.addFolder("Violent Crime");
+        v_crime.add(this.controlParams, '1').name("Murder and Nonnegligent Manslaughter").onChange(function () { me.initiateHeightChange(false) });
+        v_crime.add(this.controlParams, '2').name("Rape").onChange(function () { me.initiateHeightChange(false) });
+        v_crime.add(this.controlParams, '3').name("Robbery").onChange(function () { me.initiateHeightChange(false) });
+        v_crime.add(this.controlParams, '4').name("Aggravated Assault").onChange(function () { me.initiateHeightChange(false) });
+        const p_crime = gui.addFolder("Property Crime");
+        p_crime.add(this.controlParams, '5').name("Burglary").onChange(function () { me.initiateHeightChange(false) });
+        p_crime.add(this.controlParams, '6').name("Larceny-theft",).onChange(function () { me.initiateHeightChange(false) });
+        p_crime.add(this.controlParams, '7').name("Motor Vehicle Theft").onChange(function () { me.initiateHeightChange(false) });
+        p_crime.add(this.controlParams, '8').name("Arson").onChange(function () { me.initiateHeightChange(false) });
+        p_crime.open();
+        v_crime.open();
+    }
+
+    readYear(year) {
+        if (year != this.lastViewedYear) {
+            this.lastViewedYear = year;
+            this.crimeInfo = require("../assets/" + year + ".json");
+            if (this.controlParams[0]) {
+                this.calculatePopulationForState();
+            } else {
+                this.statePopulation = {}
+            }
+
+            this.initiateHeightChange(true);
+        }
+    }
+
+    reset(mesh, fileChange) {
+        if (fileChange) {
+            mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
+            mesh.targetHeight = 0.000001;
+            mesh.deltaHeight = 0.0;
+            if (mesh.state in this.crimeInfo && mesh.county in this.crimeInfo[mesh.state]) {
+                const info = this.crimeInfo[mesh.state][mesh.county];
+                for (var i = 0; i < 9; i++) {
+                    mesh.stats[i] = info[i];
+                }
+            }
+        }
+        if (!this.controlParams[0]) {
+            var count = 0;
+            for (var i = 1; i < 9; i++) {
+                if (this.controlParams[i]) {
+                    if (mesh.stats[i] != -1) {
+                        count += mesh.stats[i];
+                    }
+                }
+            }
+            mesh.rate = count * 1.0 / mesh.stats[0];
+        } else {
+            mesh.rate = mesh.stats[0] * 1.0 / this.statePopulation[mesh.state] / 10.0;
+        }
+        mesh.targetHeight = Math.max(0.00001, mesh.rate * 20.0); // how high it should be, from 0 to 1
+        mesh.deltaHeight = mesh.rate - mesh.scale.z / 20.0; // the amount of change for smooth transition
+    }
+
+    calculatePopulationForState() {
+        if (this.controlParams["year"] != this.statePopulation["year"]) {
+            for (var st in this.crimeInfo) {
+                var pop = 0;
+                this.statePopulation[st] = 0;
+                for (var ct in this.crimeInfo[st]) {
+                    pop += this.crimeInfo[st][ct][0] != -1 ? this.crimeInfo[st][ct][0] : 0;
+                }
+                this.statePopulation[st] = pop;
+            }
+            this.statePopulation["year"] = this.controlParams["year"];
+        }
+    }
+
+    static getHeight(element) {
+        element.style.visibility = "hidden";
+        document.body.appendChild(element);
+        var height = element.offsetHeight + 0;
+        var width = element.offsetWidth + 0;
+        document.body.removeChild(element);
+        element.style.visibility = "visible";
+
+        return { h: height, w: width };
+    }
+
 }
 
 export default MapLoader;
