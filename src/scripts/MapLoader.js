@@ -1,10 +1,8 @@
 const THREE = require("three")
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
-import { Mesh } from 'three';
 // import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 
@@ -180,7 +178,6 @@ class MapLoader {
         scene.add(this.labelGroup)
 
         // prepare for animation
-        this.step = 0; // for smooth transition, value range should be from 0 to 20
         this.stopTraversing = false;
 
         // for gui control
@@ -302,15 +299,15 @@ class MapLoader {
                 me.reset(child, fileChange)
             }
         });
-        this.step = 0;
         this.stopTraversing = false;
     }
 
     // to change the color and height of the bar, note there is a step size of 20 to reach the final height just for smooth transition
     changeHeightAndColor() {
-        const pi20 = Math.PI / 20;
+        const pi1000 = Math.PI / 1000;
         let me = this;
         var allClear = true;
+        const date = new Date();
         if (!this.stopTraversing) {
             this.countyGroup.traverse(function (child) {
                 if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
@@ -332,7 +329,7 @@ class MapLoader {
         for (const id of this.stateToID[this.lastIntersectedState]) {
             const obj = this.countyGroup.getObjectById(id);
             var color = new THREE.Color(MapLoader.colorGradient(obj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-            const factor = Math.sin(pi20 * (me.step + 10));
+            const factor = Math.sin(pi1000 * (date.getTime() + 500));
             color.r = Math.min(1.0, color.r * (1 + factor / 3));
             color.g = Math.min(1.0, color.g * (1 + factor / 3));
             color.b = Math.min(1.0, color.b * (1 + factor / 3));
@@ -352,7 +349,7 @@ class MapLoader {
         if (this.lastIntersected != -1) {
             const currentObj = this.countyGroup.getObjectById(this.lastIntersected);
             var color = new THREE.Color(MapLoader.colorGradient(currentObj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-            const factor = Math.sin(pi20 * (me.step));
+            const factor = Math.sin(pi1000 * (date.getTime()));
             color.r = Math.min(1.0, color.r * (1 + factor / 2));
             color.g = Math.min(1.0, color.g * (1 + factor / 2));
             color.b = Math.min(1.0, color.b * (1 + factor / 2));
@@ -368,7 +365,7 @@ class MapLoader {
             prevObj.material.color = color;
         }
 
-        this.step += 1;
+        
         this.previousIntersectedState = "NONE";
     }
 
