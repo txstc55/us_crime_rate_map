@@ -250,7 +250,6 @@ class MapLoader {
             }
             renderer.setPixelRatio(window.devicePixelRatio * 0.66);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            console.log(window.innerWidth);
             // controls.update();
         });
 
@@ -365,14 +364,13 @@ class MapLoader {
         var allClear = true;
         const date = new Date();
         const time = date.getTime() / 300;
-        const sinValue = Math.sin(time) * 0.66.0 + 0.5;
+        const sinValue = Math.sin(time) * 0.5 + 0.5;
         var sceneChildrenCount = 0;
         if (!this.stopTraversing) {
             for (const st in this.stateGroups) {
                 this.stateGroups[st].traverse(function (child) {
                     if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
                         child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
-                        // console.log(child.material.uniforms);
                         child.material.uniforms.height.value = child.scale.z;
                         allClear = false;
                         sceneChildrenCount += 1;
@@ -505,7 +503,7 @@ class MapLoader {
 
 
         mesh.targetHeight = Math.max(0.00001, mesh.rate * 20.0); // how high it should be, from 0 to 1
-        mesh.deltaHeight = mesh.rate - mesh.scale.z * 0.660.0; // the amount of change for smooth transition
+        mesh.deltaHeight = mesh.rate - mesh.scale.z / 20.0; // the amount of change for smooth transition
         mesh.bbox.max.z = mesh.targetHeight * this.initialHeight;
     }
 
