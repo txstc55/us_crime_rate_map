@@ -359,7 +359,6 @@ class MapLoader {
 
     // to change the color and height of the bar, note there is a step size of 20 to reach the final height just for smooth transition
     changeHeightAndColor() {
-        // const pi1000 = Math.PI / 1000;
         let me = this;
         var allClear = true;
         const date = new Date();
@@ -519,17 +518,6 @@ class MapLoader {
             }
             this.statePopulation["year"] = this.controlParams["year"];
         }
-    }
-
-    static getHeight(element) {
-        element.style.visibility = "hidden";
-        document.body.appendChild(element);
-        var height = element.offsetHeight + 0;
-        var width = element.offsetWidth + 0;
-        document.body.removeChild(element);
-        element.style.visibility = "visible";
-
-        return { h: height, w: width };
     }
 
 }
