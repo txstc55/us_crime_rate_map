@@ -5,30 +5,55 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
+const VS = `
+void main(){
+    vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * modelViewPosition; 
+}
+`
+
+const FS = `
+vec3 lowColor = vec3(95.0/255.0, 251.0/255.0, 181.0/255.0);
+vec3 mediumColor = vec3(236.0/255.0, 172.0/255.0, 70.0/255.0);
+vec3 highColor = vec3(246.0/255.0, 15.0/255.0, 15.0/255.0);
+vec3 bright = vec3(1.0, 1.0, 1.0);
+vec3 dark = vec3(0.02, 0.08, 0.08);
+uniform float height;
+uniform float highlightFactor;
+
+vec3 calculateColor(){
+    float d = height * 2.0;
+    vec3 result = vec3(0.0, 0.0, 0.0);
+    if (d >= 1.0){
+        result = mix(mediumColor, highColor, d - 1.0);
+    } else{
+        result = mix(lowColor, mediumColor, d);
+    }
+    return result;
+}
+
+vec3 highlight(){
+    vec3 currentColor = calculateColor();
+    if (highlightFactor != 0.0){
+        if (highlightFactor > 0.0){
+            return mix(currentColor, bright, highlightFactor);
+        }else{
+            return mix(currentColor, dark, -highlightFactor);
+        }
+    }
+    return currentColor;
+}
+
+
+void main(){
+    vec3 calculatedColor = highlight();
+    gl_FragColor= vec4(calculatedColor, 0.0);
+}
+`
+
 
 
 class MapLoader {
-    static get highColor() {
-        return {
-            red: 246,
-            green: 15,
-            blue: 15
-        }
-    };
-    static get mediumColor() {
-        return {
-            red: 236,
-            green: 172,
-            blue: 70
-        };
-    };
-    static get lowColor() {
-        return {
-            red: 95,
-            green: 251,
-            blue: 181
-        };
-    };
 
     static get abbreviationToState() {
         return { "AL": "Alabama", "AK": "Alaska", "AS": "American Samoa", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District Of Columbia", "FM": "Federated States Of Micronesia", "FL": "Florida", "GA": "Georgia", "GU": "Guam", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MH": "Marshall Islands", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "MP": "Northern Mariana Islands", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PW": "Palau", "PA": "Pennsylvania", "PR": "Puerto Rico", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VI": "Virgin Islands", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming" };
@@ -48,18 +73,9 @@ class MapLoader {
         }
     }
 
-    static brightestColor() {
-        return new THREE.Color("rgb(255, 255, 255)")
-    }
-
-    static darkestColor() {
-        return new THREE.Color("rgb(50, 50, 50)")
-    }
-
     static statsString() {
         return ["Population", "Murder and Nonnegligent Manslaughter", "Rape", "Robbery", "Aggravated Assault", "Burglary", "Larceny-theft", "Motor Vehicle Theft", "Arson"];
     }
-
 
 
 
@@ -88,10 +104,25 @@ class MapLoader {
         this.stateToID = {}; // record the id for each state
         this.stateToID["NONE"] = []; // place holder
         this.initialHeight = 150; // how high is the bar
+        this.stateGroups = {};
+        for (const st in MapLoader.abbreviationToState) {
+            const g = new THREE.Group();
+            g.scale.multiplyScalar(0.25);
+            g.position.x = -120;
+            g.position.y = 80;
+            g.scale.y *= - 1;
+            this.stateGroups[st] = g;
+        }
+        this.stateGroups["NONE"] = new THREE.Group(); // place holder
 
         // setup canvas and renderer
         this.canvas = canvas;
         const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance", });
+        if (window.innerWidth > 1920 || window.innerHeight > 1920) {
+            renderer.setPixelRatio(window.devicePixelRatio * 0.66);
+        } else {
+            renderer.setPixelRatio(window.divicePixelRatio);
+        }
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x050d1a, 1);
         const scene = new THREE.Scene();
@@ -116,16 +147,6 @@ class MapLoader {
         document.getElementById('container').appendChild(stats.dom);
 
 
-        // county group for all the counties collectively
-        this.countyGroup = new THREE.Group();
-        this.countyGroup.scale.multiplyScalar(0.25);
-        this.countyGroup.position.x = -120;
-        this.countyGroup.position.y = 80;
-        this.countyGroup.scale.y *= - 1;
-
-        // label group just because
-        this.labelGroup = new THREE.Group();
-
         // extrude setting for creating mesh from 2d shape
         var extrudeSettings = {
             steps: 1,
@@ -136,22 +157,21 @@ class MapLoader {
         // load map svg
         var svgLoader = new SVGLoader();
         let me = this;
+
+        const shaderMaterial = new THREE.ShaderMaterial({ uniforms: { "height": { value: 0.00001 }, "highlightFactor": { value: 0.0 } }, vertexShader: VS, fragmentShader: FS });
+
         svgLoader.load(
             svgName,
             function (data) {
                 const paths = data.paths;
                 for (let i = 0; i < paths.length; i++) {
-                    const crimeColor = MapLoader.colorGradient(0.00001, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor);
                     const path = paths[i];
-                    const material = new THREE.MeshBasicMaterial({
-                        color: new THREE.Color(crimeColor),
-                    });
 
                     const shapes = SVGLoader.createShapes(path);
                     const geometry = new THREE.ExtrudeGeometry(shapes, extrudeSettings);
                     // geometry.computeBoundsTree();
 
-                    const mesh = new THREE.Mesh(geometry, material);
+                    const mesh = new THREE.Mesh(geometry, shaderMaterial.clone());
                     mesh.scale.z = 0.00001;
                     mesh.county = countyInfo[i][1];
                     mesh.state = countyInfo[i][0];
@@ -160,7 +180,7 @@ class MapLoader {
                     mesh.bbox = new THREE.Box3();
 
                     me.reset(mesh, true);
-                    me.countyGroup.add(mesh);
+                    me.stateGroups[mesh.state].add(mesh);
 
                     // compute bounding box
                     const bbox = new THREE.Box3().setFromObject(mesh);
@@ -172,6 +192,7 @@ class MapLoader {
                         me.stateToID[mesh.state] = [];
                     }
                     me.stateToID[mesh.state].push(mesh.id);
+
                 }
             },
             // called when loading is in progresses
@@ -189,8 +210,9 @@ class MapLoader {
         svgLoader = null;
 
         // add the group to the scene
-        scene.add(this.countyGroup);
-        scene.add(this.labelGroup)
+        for (const st in this.stateGroups) {
+            scene.add(this.stateGroups[st]);
+        }
 
         // prepare for animation
         this.stopTraversing = false;
@@ -221,48 +243,59 @@ class MapLoader {
         window.addEventListener('resize', function () {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            if (window.innerWidth > 1920 || window.innerHeight > 1920) {
+                renderer.setPixelRatio(window.devicePixelRatio * 0.66);
+            } else {
+                renderer.setPixelRatio(window.divicePixelRatio);
+            }
+            renderer.setPixelRatio(window.devicePixelRatio * 0.66);
             renderer.setSize(window.innerWidth, window.innerHeight);
+            console.log(window.innerWidth);
             // controls.update();
         });
 
 
+        // check intersection by checking the bounding box
         function CheckIntersection(ray) {
             const usedRay = ray.ray;
             var hitDistance = 9999;
             var closestID = -1;
+            var state = "NONE";
 
-            me.countyGroup.traverse(function (child) {
-                if (child.isMesh) {
-                    // check bbox intersection
-                    const bbox = child.bbox;
-                    if (usedRay.intersectsBox(bbox)) {
-                        const intersection = ray.intersectObject(child, true);
-                        if (intersection.length > 0) {
-                            if (intersection[0].distance < hitDistance) {
-                                hitDistance = intersection[0].distance;
-                                closestID = intersection[0].object.id;
+            for (const st in me.stateGroups) {
+                me.stateGroups[st].traverse(function (child) {
+                    if (child.isMesh) {
+                        // check bbox intersection
+                        const bbox = child.bbox;
+                        if (usedRay.intersectsBox(bbox)) {
+                            const intersection = ray.intersectObject(child, true);
+                            if (intersection.length > 0) {
+                                if (intersection[0].distance < hitDistance) {
+                                    hitDistance = intersection[0].distance;
+                                    closestID = intersection[0].object.id;
+                                    state = st;
+                                }
                             }
                         }
                     }
-                }
+                })
 
-            })
-            return closestID;
+            }
+            return { "state": state, "id": closestID };
         }
 
+        // create the label texts        
         function CreateLabelDiv(obj) {
             me.previousIntersected = me.lastIntersected;
             me.lastIntersected = obj.id;
-            if (me.controlParams.showState) {
-                me.previousIntersectedState = me.lastIntersectedState == obj.state ? "NONE" : me.lastIntersectedState;
-                me.lastIntersectedState = obj.state;
-            } else {
-                me.previousIntersectedState = "NONE";
-                me.lastIntersectedState = "NONE";
-            }
+
+            me.previousIntersectedState = me.lastIntersectedState == obj.state ? "NONE" : me.lastIntersectedState;
+            me.lastIntersectedState = obj.state;
+
             labelDiv.textContent = obj.desc;
         }
 
+        // when mouse move, we need to do ray intersection and update mouse position
         var mouseMoved = false;
         document.addEventListener('mousemove', function (event) {
             event.preventDefault();
@@ -279,16 +312,16 @@ class MapLoader {
                 mouse.x = (mouseReal.x / window.innerWidth) * 2 - 1;
                 mouse.y = - (mouseReal.y / window.innerHeight) * 2 + 1;
                 raycaster.setFromCamera(mouse, camera);
-                const intersectID = CheckIntersection(raycaster);
-                if (intersectID == -1) {
+                const intersectionResult = CheckIntersection(raycaster);
+                if (intersectionResult["id"] == -1) {
                     me.previousIntersected = me.lastIntersected;
                     me.previousIntersectedState = me.lastIntersectedState;
                     me.lastIntersected = -1;
                     me.lastIntersectedState = "NONE";
                     labelDiv.style.visibility = "hidden";
                 } else {
-                    const obj = scene.getObjectById(intersectID);
-                    if (obj.isMesh && intersectID != me.lastIntersected) {
+                    const obj = me.stateGroups[intersectionResult["state"]].getObjectById(intersectionResult["id"]);
+                    if (obj.isMesh && intersectionResult["id"] != me.lastIntersected) {
                         CreateLabelDiv(obj);
                     }
                     labelDiv.style.visibility = "visible";
@@ -315,13 +348,14 @@ class MapLoader {
         if (this.controlParams[0]) {
             this.calculatePopulationForState();
         }
-
-        this.countyGroup.traverse(function (child) {
-            if (child.isMesh) {
-                me.reset(child, fileChange)
-            }
-        });
-        this.stopTraversing = false;
+        for (const st in this.stateGroups) {
+            this.stateGroups[st].traverse(function (child) {
+                if (child.isMesh) {
+                    me.reset(child, fileChange)
+                }
+            });
+            this.stopTraversing = false;
+        }
     }
 
     // to change the color and height of the bar, note there is a step size of 20 to reach the final height just for smooth transition
@@ -331,95 +365,59 @@ class MapLoader {
         var allClear = true;
         const date = new Date();
         const time = date.getTime() / 300;
+        const sinValue = Math.sin(time) * 0.66.0 + 0.5;
+        var sceneChildrenCount = 0;
         if (!this.stopTraversing) {
-            this.countyGroup.traverse(function (child) {
-                if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
-                    child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
-                    const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-                    child.material.color = color;
-                    allClear = false;
-                }
-            });
+            for (const st in this.stateGroups) {
+                this.stateGroups[st].traverse(function (child) {
+                    if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
+                        child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
+                        // console.log(child.material.uniforms);
+                        child.material.uniforms.height.value = child.scale.z;
+                        allClear = false;
+                        sceneChildrenCount += 1;
+                    }
+                });
+            }
         }
 
-        if (!this.stopTraversing && allClear && this.countyGroup.children.length > 0) {
+        if (!this.stopTraversing && allClear && sceneChildrenCount > 0) {
             this.stopTraversing = true;
         }
 
-        // change color of the current state
-        for (const id of this.stateToID[this.lastIntersectedState]) {
-            const currentObj = this.countyGroup.getObjectById(id);
-            if (currentObj.targetColor == null) {
-                currentObj.targetColor = new THREE.Color(MapLoader.colorGradient(currentObj.targetHeight, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor))
-            }
-            currentObj.material.color = new THREE.Color().lerpColors(currentObj.targetColor, MapLoader.darkestColor(), Math.sin(time) / 2 + 0.5);
+        if (me.controlParams.showState) {
+            // change color of the current state
+            this.stateGroups[this.lastIntersectedState].traverse(function (child) {
+                if (child.isMesh) {
+                    child.material.uniforms.highlightFactor.value = -(sinValue);
+                }
+            })
         }
-
         // stop changing color of the last state
-        for (const id of this.stateToID[this.previousIntersectedState]) {
-            const currentObj = this.countyGroup.getObjectById(id);
-            currentObj.targetColor = null;
-            const color = new THREE.Color(MapLoader.colorGradient(currentObj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-            currentObj.material.color = color;
-        }
+        this.stateGroups[this.previousIntersectedState].traverse(function (child) {
+            if (child.isMesh) {
+                child.material.uniforms.highlightFactor.value = 0.0;
+            }
+        })
 
         // highlight the current obj
         if (this.lastIntersected != -1) {
-            const currentObj = this.countyGroup.getObjectById(this.lastIntersected);
-            if (currentObj.targetColor == null) {
-                currentObj.targetColor = new THREE.Color(MapLoader.colorGradient(currentObj.targetHeight, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-            }
-            currentObj.material.color = new THREE.Color().lerpColors(currentObj.targetColor, MapLoader.brightestColor(), Math.sin(time) / 2 + 0.5);
+            this.stateGroups[this.lastIntersectedState].getObjectById(this.lastIntersected).material.uniforms.highlightFactor.value = sinValue;
         }
 
 
         // stop highlighting the previous obj
         if (this.previousIntersected != -1) {
-            const prevObj = this.countyGroup.getObjectById(this.previousIntersected);
+            if (this.previousIntersectedState == "NONE") {
+                this.stateGroups[this.lastIntersectedState].getObjectById(this.previousIntersected).material.uniforms.highlightFactor.value = 0.0;
+            } else {
+                this.stateGroups[this.previousIntersectedState].getObjectById(this.previousIntersected).material.uniforms.highlightFactor.value = 0.0;
+            }
             this.previousIntersected = -1;
-            const color = new THREE.Color(MapLoader.colorGradient(prevObj.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
-            prevObj.material.color = color;
-            prevObj.targetColor = null;
         }
 
 
         this.previousIntersectedState = "NONE";
-    }
-
-    static colorGradient(fadeFraction, rgbColor1, rgbColor2, rgbColor3) {
-        if (fadeFraction > 1.0) {
-            // console.log(fadeFraction)
-            fadeFraction = 1.0;
-        } else if (fadeFraction < 0) {
-            fadeFraction = 0.0;
-        }
-        var color1 = rgbColor1;
-        var color2 = rgbColor2;
-        var fade = fadeFraction;
-
-        // Do we have 3 colors for the gradient? Need to adjust the params.
-        if (rgbColor3) {
-            fade = fade * 2;
-
-            // Find which interval to use and adjust the fade percentage
-            if (fade >= 1) {
-                fade -= 1;
-                color1 = rgbColor2;
-                color2 = rgbColor3;
-            }
-        }
-
-        var diffRed = color2.red - color1.red;
-        var diffGreen = color2.green - color1.green;
-        var diffBlue = color2.blue - color1.blue;
-
-        var gradient = {
-            red: parseInt(Math.floor(color1.red + (diffRed * fade)), 10),
-            green: parseInt(Math.floor(color1.green + (diffGreen * fade)), 10),
-            blue: parseInt(Math.floor(color1.blue + (diffBlue * fade)), 10),
-        };
-
-        return 'rgb(' + gradient.red + ',' + gradient.green + ',' + gradient.blue + ')';
     }
 
     createGUI() {
@@ -507,7 +505,7 @@ class MapLoader {
 
 
         mesh.targetHeight = Math.max(0.00001, mesh.rate * 20.0); // how high it should be, from 0 to 1
-        mesh.deltaHeight = mesh.rate - mesh.scale.z / 20.0; // the amount of change for smooth transition
+        mesh.deltaHeight = mesh.rate - mesh.scale.z * 0.660.0; // the amount of change for smooth transition
         mesh.bbox.max.z = mesh.targetHeight * this.initialHeight;
     }
 
