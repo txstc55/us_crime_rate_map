@@ -82,12 +82,12 @@ class MapLoader {
             7: true,
             8: true
         };
-        this.lastViewedYear = 2018;
-        this.statePopulation = {};
-        this.statePopulation["year"] = -1;
-        this.stateToID = {};
-        this.stateToID["NONE"] = [];
-        this.initialHeight = 150;
+        this.lastViewedYear = 2018; // auto load 2018
+        this.statePopulation = {}; // to record the population total of each state
+        this.statePopulation["year"] = -1; // idk why it was here but sure
+        this.stateToID = {}; // record the id for each state
+        this.stateToID["NONE"] = []; // place holder
+        this.initialHeight = 150; // how high is the bar
 
         // setup canvas and renderer
         this.canvas = canvas;
@@ -157,12 +157,15 @@ class MapLoader {
                     mesh.state = countyInfo[i][0];
                     mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
                     mesh.rate = 0.0;
+                    mesh.bbox = new THREE.Box3();
+
                     me.reset(mesh, true);
                     me.countyGroup.add(mesh);
 
+                    // compute bounding box
                     const bbox = new THREE.Box3().setFromObject(mesh);
                     mesh.bbox = bbox;
-                    mesh.bbox.max.z = mesh.scale.z * me.initialHeight;
+                    mesh.bbox.max.z = mesh.targetHeight * me.initialHeight;
 
                     // push the id for each state
                     if (!(mesh.state in me.stateToID)) {
@@ -202,7 +205,8 @@ class MapLoader {
 
         // for raycasting
         const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector3(1, 1, 0.5);
+        const mouse = new THREE.Vector2(1, 1);
+        const mouseReal = new THREE.Vector2(0, 0);
 
         // div element that we will use for label
         const labelDiv = document.createElement('h4');
@@ -226,6 +230,7 @@ class MapLoader {
             const usedRay = ray.ray;
             var hitDistance = 9999;
             var closestID = -1;
+
             me.countyGroup.traverse(function (child) {
                 if (child.isMesh) {
                     // check bbox intersection
@@ -247,9 +252,7 @@ class MapLoader {
 
         function CreateLabelDiv(obj) {
             me.previousIntersected = me.lastIntersected;
-
             me.lastIntersected = obj.id;
-
             if (me.controlParams.showState) {
                 me.previousIntersectedState = me.lastIntersectedState == obj.state ? "NONE" : me.lastIntersectedState;
                 me.lastIntersectedState = obj.state;
@@ -262,9 +265,9 @@ class MapLoader {
 
         var mouseMoved = false;
         document.addEventListener('mousemove', function (event) {
-            // event.preventDefault();
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+            event.preventDefault();
+            mouseReal.x = event.clientX;
+            mouseReal.y = event.clientY;
             mouseMoved = true;
         });
 
@@ -273,6 +276,8 @@ class MapLoader {
             stats.update();
             controls.update();
             if (mouseMoved) {
+                mouse.x = (mouseReal.x / window.innerWidth) * 2 - 1;
+                mouse.y = - (mouseReal.y / window.innerHeight) * 2 + 1;
                 raycaster.setFromCamera(mouse, camera);
                 const intersectID = CheckIntersection(raycaster);
                 if (intersectID == -1) {
@@ -287,16 +292,14 @@ class MapLoader {
                         CreateLabelDiv(obj);
                     }
                     labelDiv.style.visibility = "visible";
-                    const clientX = (mouse.x + 1) / 2 * window.innerWidth;
-                    const clientY = -(mouse.y - 1) / 2 * window.innerHeight;
                     if (mouse.x >= 0) {
-                        labelDiv.style.right = (window.innerWidth - clientX + 5) + 'px';
+                        labelDiv.style.right = (window.innerWidth - mouseReal.x + 5) + 'px';
                         labelDiv.style.left = "";
                     } else {
                         labelDiv.style.right = ""
-                        labelDiv.style.left = (clientX + 5) + "px";
+                        labelDiv.style.left = (mouseReal.x + 5) + "px";
                     }
-                    labelDiv.style.top = (clientY + 5) + 'px';
+                    labelDiv.style.top = (mouseReal.y + 5) + 'px';
                 }
                 mouseMoved = false;
             }
@@ -312,6 +315,7 @@ class MapLoader {
         if (this.controlParams[0]) {
             this.calculatePopulationForState();
         }
+
         this.countyGroup.traverse(function (child) {
             if (child.isMesh) {
                 me.reset(child, fileChange)
@@ -333,13 +337,12 @@ class MapLoader {
                     child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
                     const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
                     child.material.color = color;
-                    child.bbox.max.z = child.scale.z * me.initialHeight;
                     allClear = false;
                 }
             });
         }
 
-        if (allClear && this.countyGroup.children.length > 0) {
+        if (!this.stopTraversing && allClear && this.countyGroup.children.length > 0) {
             this.stopTraversing = true;
         }
 
@@ -457,8 +460,7 @@ class MapLoader {
         if (fileChange) {
             mesh.stats = [-1, -1, -1, -1, -1, -1, -1, -1, -1];
             mesh.allTexts = ["Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available", "Not Available"]
-
-            mesh.targetHeight = 0.000001;
+            mesh.targetHeight = 0.00001;
             mesh.deltaHeight = 0.0;
             if (mesh.state in this.crimeInfo && mesh.county in this.crimeInfo[mesh.state]) {
                 const info = this.crimeInfo[mesh.state][mesh.county];
@@ -506,6 +508,7 @@ class MapLoader {
 
         mesh.targetHeight = Math.max(0.00001, mesh.rate * 20.0); // how high it should be, from 0 to 1
         mesh.deltaHeight = mesh.rate - mesh.scale.z / 20.0; // the amount of change for smooth transition
+        mesh.bbox.max.z = mesh.targetHeight * this.initialHeight;
     }
 
     calculatePopulationForState() {
