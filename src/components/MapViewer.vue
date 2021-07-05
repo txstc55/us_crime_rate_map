@@ -1,5 +1,6 @@
 <template>
   <div>
+    <div id="container"></div>
     <div class="canvas-wrapper">
       <canvas class="canvas" ref="myCanvas" />
       <div id="menuInfo">
