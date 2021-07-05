@@ -487,7 +487,7 @@ class MapLoader {
         if (!this.controlParams[0]) {
             mesh.desc += "\r\nCumulated Rate: " + (mesh.rate * 100).toFixed(2) + "%";
         } else {
-            mesh.desc += "\r\nState Population Density: " + (mesh.stats[0] != -1 ? (mesh.rate * 10 * 100).toFixed(2) + "%" : "Not Available");
+            mesh.desc += "\r\nPopulation Density in State: " + (mesh.stats[0] != -1 ? (mesh.rate * 10 * 100).toFixed(2) + "%" : "Not Available");
         }
 
 
