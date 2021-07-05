@@ -152,8 +152,7 @@ class MapLoader {
 
                     const bbox = new THREE.Box3().setFromObject(mesh);
                     mesh.radiusAtLevel = Math.sqrt((bbox.max.x - bbox.min.x) ** 2 + ((bbox.max.y - bbox.min.y) ** 2)) / 2.0;
-                    mesh.radius = Math.sqrt(mesh.radiusAtLevel ** 2 + ((mesh.scale.z * me.initialHeight) ** 2) / 4);
-                    mesh.center = new THREE.Vector3((bbox.max.x + bbox.min.x) / 2, (bbox.max.y + bbox.min.y) / 2, (mesh.scale.z * me.initialHeight) / 2);
+                    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3((bbox.max.x + bbox.min.x) / 2, (bbox.max.y + bbox.min.y) / 2, (mesh.scale.z * me.initialHeight) / 2), Math.sqrt(mesh.radiusAtLevel ** 2 + ((mesh.scale.z * me.initialHeight) ** 2) / 4));
 
                     // push the id for each state
                     if (!(mesh.state in me.stateToID)) {
@@ -216,37 +215,24 @@ class MapLoader {
 
 
         function CheckIntersection(ray) {
-            var mouseVector = new THREE.Vector3().copy(mouse);
-            mouseVector.unproject(camera);
-            const dir = mouseVector.sub(camera.position).normalize(); // the is the negative direction though
-            const distance = - camera.position.z / dir.z;
-            const pos = camera.position.clone().add(dir.multiplyScalar(distance)); // this is the unprojected mouse position where z is at 0;
+            const usedRay = ray.ray;
             var hitDistance = 999999999;
             var closestID = -1;
             me.countyGroup.traverse(function (child) {
                 if (child.isMesh) {
-                    // first check if larger sphere intersect
-                    const center = child.center;
-                    if ((pos.x - center.x) ** 2 + (pos.y - center.y) ** 2 < child.radius ** 2 * 4) {
-                        // check smaller sphere intersect
-                        var m = new THREE.Vector3();
-                        m.copy(camera.position);
-                        m = m.sub(center);
-                        const b = - (m.dot(dir));
-                        const c = m.dot(m) - child.radius ** 2;
-                        const discr = b ** 2 - c;
-                        if (discr >= 0) {
-                            // sphere intersection
-                            const intersection = ray.intersectObject(child, true);
-                            if (intersection.length > 0) {
-                                if (intersection[0].distance < hitDistance) {
-                                    hitDistance = intersection[0].distance;
-                                    closestID = intersection[0].object.id;
-                                }
+                    // check sphere intersection
+                    const sphere = child.boundingSphere;
+                    if (usedRay.intersectsSphere(sphere)) {
+                        const intersection = ray.intersectObject(child, true);
+                        if (intersection.length > 0) {
+                            if (intersection[0].distance < hitDistance) {
+                                hitDistance = intersection[0].distance;
+                                closestID = intersection[0].object.id;
                             }
                         }
                     }
                 }
+
             })
             return closestID;
         }
@@ -331,8 +317,8 @@ class MapLoader {
                     child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
                     const color = new THREE.Color(MapLoader.colorGradient(child.scale.z, MapLoader.lowColor, MapLoader.mediumColor, MapLoader.highColor));
                     child.material.color = color;
-                    child.radius = Math.sqrt(child.radiusAtLevel ** 2 + ((child.scale.z * me.initialHeight) ** 2) / 4);
-                    child.center.z = (child.scale.z * me.initialHeight) / 2;
+                    child.boundingSphere.center.z = (child.scale.z * me.initialHeight) / 2;
+                    child.boundingSphere.radius = Math.sqrt(child.radiusAtLevel ** 2 + ((child.scale.z * me.initialHeight) ** 2) / 4);
                     allClear = false;
                 }
             });
