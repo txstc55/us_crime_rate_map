@@ -365,7 +365,7 @@ class MapLoader {
         const date = new Date();
         const time = date.getTime() / 300;
         const sinValue = Math.sin(time) * 0.5 + 0.5;
-        var sceneChildrenCount = 0;
+        var sceneHasChildren = false;
         if (!this.stopTraversing) {
             for (const st in this.stateGroups) {
                 this.stateGroups[st].traverse(function (child) {
@@ -373,13 +373,13 @@ class MapLoader {
                         child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
                         child.material.uniforms.height.value = child.scale.z;
                         allClear = false;
-                        sceneChildrenCount += 1;
+                        sceneHasChildren = true;
                     }
                 });
             }
         }
 
-        if (!this.stopTraversing && allClear && sceneChildrenCount > 0) {
+        if (!this.stopTraversing && allClear && sceneHasChildren) {
             this.stopTraversing = true;
         }
 
