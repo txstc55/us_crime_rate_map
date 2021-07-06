@@ -373,11 +373,13 @@ class MapLoader {
         if (!this.stopTraversing) {
             for (const st in this.stateGroups) {
                 this.stateGroups[st].traverse(function (child) {
-                    if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
-                        child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
-                        child.material.uniforms.height.value = child.scale.z;
-                        allClear = false;
+                    if (child.isMesh) {
                         sceneHasChildren = true;
+                        if (child.isMesh && (child.targetHeight - child.scale.z) / child.deltaHeight >= 1) {
+                            child.scale.set(1, 1, Math.max(0.00001, child.scale.z + child.deltaHeight));
+                            child.material.uniforms.height.value = child.scale.z;
+                            allClear = false;
+                        }
                     }
                 });
             }
