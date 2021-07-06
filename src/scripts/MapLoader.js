@@ -137,6 +137,7 @@ class MapLoader {
         camera.position.x = 0
         camera.position.y = 0
         camera.position.z = 200
+        camera.up.set(0, 0, 1);
         scene.add(camera);
 
         // orbit control for mouse interactions
