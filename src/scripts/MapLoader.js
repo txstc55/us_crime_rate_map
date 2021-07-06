@@ -88,6 +88,7 @@ class MapLoader {
             year: 2018,
             threeD: true,
             showState: false,
+            individualState: "ALL",
             0: false,
             1: true,
             2: true,
@@ -211,8 +212,10 @@ class MapLoader {
 
         // add the group to the scene
         for (const st in this.stateGroups) {
+            // this.stateGroups[st].visible = false;
             scene.add(this.stateGroups[st]);
         }
+        // this.stateGroups["TX"].visible = true;
 
         // prepare for animation
         this.stopTraversing = false;
@@ -262,22 +265,24 @@ class MapLoader {
             var state = "NONE";
 
             for (const st in me.stateGroups) {
-                me.stateGroups[st].traverse(function (child) {
-                    if (child.isMesh) {
-                        // check bbox intersection
-                        const bbox = child.bbox;
-                        if (usedRay.intersectsBox(bbox)) {
-                            const intersection = ray.intersectObject(child, true);
-                            if (intersection.length > 0) {
-                                if (intersection[0].distance < hitDistance) {
-                                    hitDistance = intersection[0].distance;
-                                    closestID = intersection[0].object.id;
-                                    state = st;
+                if (me.stateGroups[st].visible) {
+                    me.stateGroups[st].traverse(function (child) {
+                        if (child.isMesh) {
+                            // check bbox intersection
+                            const bbox = child.bbox;
+                            if (usedRay.intersectsBox(bbox)) {
+                                const intersection = ray.intersectObject(child, true);
+                                if (intersection.length > 0) {
+                                    if (intersection[0].distance < hitDistance) {
+                                        hitDistance = intersection[0].distance;
+                                        closestID = intersection[0].object.id;
+                                        state = st;
+                                    }
                                 }
                             }
                         }
-                    }
-                })
+                    })
+                }
 
             }
             return { "state": state, "id": closestID };
@@ -419,10 +424,27 @@ class MapLoader {
 
     createGUI() {
         let me = this;
+        const stateNames = {}
+        stateNames["ALL"] = "ALL";
+        for (const st in MapLoader.abbreviationToState) {
+            stateNames[MapLoader.abbreviationToState[st]] = st;
+        }
         const gui = new GUI({ width: 550 });
         gui.add(this.controlParams, 'year', 2013, 2018).step(1).name("Year").onChange(function () { me.readYear(me.controlParams.year) });
         gui.add(this.controlParams, '0').name("Population Density").onChange(function () { me.initiateHeightChange(false) });
         gui.add(this.controlParams, 'showState').name("Highlight State").onChange();
+        gui.add(this.controlParams, "individualState", stateNames).name("View Individual State").onChange(function () {
+            if (me.controlParams.individualState == "ALL") {
+                for (const st in me.stateGroups) {
+                    me.stateGroups[st].visible = true;
+                }
+            } else {
+                for (const st in me.stateGroups) {
+                    me.stateGroups[st].visible = false;
+                }
+                me.stateGroups[me.controlParams.individualState].visible = true;
+            }
+        });
         const v_crime = gui.addFolder("Violent Crime");
         v_crime.add(this.controlParams, '1').name("Murder and Nonnegligent Manslaughter").onChange(function () { me.initiateHeightChange(false) });
         v_crime.add(this.controlParams, '2').name("Rape").onChange(function () { me.initiateHeightChange(false) });

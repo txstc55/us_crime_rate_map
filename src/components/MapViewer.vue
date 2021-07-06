@@ -41,8 +41,7 @@ export default {
     };
   },
 
-  methods: {
-  },
+  methods: {},
 
   mounted() {
     // for safari
@@ -68,13 +67,13 @@ export default {
 </script>
 
 <style>
-.dg{
-    -webkit-touch-callout: none; /* iOS Safari */
-    -webkit-user-select: none; /* Safari */
-     -khtml-user-select: none; /* Konqueror HTML */
-       -moz-user-select: none; /* Old versions of Firefox */
-        -ms-user-select: none; /* Internet Explorer/Edge */
-            user-select: none; /* Non-prefixed version, currently
+.dg {
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none; /* Safari */
+  -khtml-user-select: none; /* Konqueror HTML */
+  -moz-user-select: none; /* Old versions of Firefox */
+  -ms-user-select: none; /* Internet Explorer/Edge */
+  user-select: none; /* Non-prefixed version, currently
                                   supported by Chrome, Edge, Opera and Firefox */
 }
 .dg.main.taller-than-window .close-button {
@@ -158,12 +157,26 @@ canvas {
 
 .dg .c input[type="text"]:focus {
   background: rgb(34, 30, 90);
-  color: #fad744;
+  color: #afc8dd;
+  text-align: center;
 }
 
 .dg .c input[type="checkbox"] {
   float: right;
   /* display: inline-block */
+}
+
+.dg .c select {
+  background: #2d4157;
+  color: #fad744;
+  text-align: center;
+}
+
+
+
+.dg .c .property-name {
+  background: rgb(34, 30, 90);
+  color: #fad744;
 }
 
 .dg .c .slider {
@@ -174,8 +187,9 @@ canvas {
   background: #68ecd6;
 }
 
-.dg .c {
-}
+/* .dg .c {
+  background: #2d4157;
+} */
 
 .dg .c .slider:hover {
   background: #eee;
@@ -220,8 +234,8 @@ body {
   border-radius: 10px;
   border-top-left-radius: 0;
   box-shadow: 3px 3px 5px #333;
-  color: #F4af1b;
-  font-weight: bold
+  color: #f4af1b;
+  font-weight: bold;
 }
 
 .menuForm table {
@@ -282,12 +296,11 @@ th {
 
 .noselect {
   -webkit-touch-callout: none; /* iOS Safari */
-    -webkit-user-select: none; /* Safari */
-     -khtml-user-select: none; /* Konqueror HTML */
-       -moz-user-select: none; /* Old versions of Firefox */
-        -ms-user-select: none; /* Internet Explorer/Edge */
-            user-select: none; /* Non-prefixed version, currently
+  -webkit-user-select: none; /* Safari */
+  -khtml-user-select: none; /* Konqueror HTML */
+  -moz-user-select: none; /* Old versions of Firefox */
+  -ms-user-select: none; /* Internet Explorer/Edge */
+  user-select: none; /* Non-prefixed version, currently
                                   supported by Chrome, Edge, Opera and Firefox */
 }
-
 </style>
