@@ -81,7 +81,7 @@ class MapLoader {
 
 
     constructor(canvas, svgName, countyInfo) {
-        this.crimeInfo = require("../assets/2018.json");
+        this.crimeInfo = require("../assets/2013.json");
 
         // check statsIndex for more
         this.controlParams = {
@@ -104,7 +104,7 @@ class MapLoader {
         this.statePopulation["year"] = -1; // idk why it was here but sure
         this.stateToID = {}; // record the id for each state
         this.stateToID["NONE"] = []; // place holder
-        this.initialHeight = 150; // how high is the bar
+        this.initialHeight = 250; // how high is the bar
         this.stateGroups = {};
         for (const st in MapLoader.abbreviationToState) {
             const g = new THREE.Group();
@@ -119,11 +119,11 @@ class MapLoader {
         // setup canvas and renderer
         this.canvas = canvas;
         const renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance", });
-        if (window.innerWidth > 1920 || window.innerHeight > 1920) {
-            renderer.setPixelRatio(window.devicePixelRatio * 0.66);
-        } else {
-            renderer.setPixelRatio(window.divicePixelRatio);
-        }
+        // if (window.innerWidth > 1920 || window.innerHeight > 1920) {
+        //     renderer.setPixelRatio(window.devicePixelRatio * 0.66);
+        // } else {
+        //     renderer.setPixelRatio(window.divicePixelRatio);
+        // }
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x050d1a, 1);
         const scene = new THREE.Scene();
@@ -134,18 +134,20 @@ class MapLoader {
 
         // create camera
         const camera = new THREE.PerspectiveCamera(50, this.canvas.width / this.canvas.height, 1, 10000000);
-        camera.position.x = 0
-        camera.position.y = 0
+        camera.position.x = 0;
+        camera.position.y = -200;
         camera.position.z = 200
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+        camera.up.set(0, 0, 1);
         scene.add(camera);
 
-        // orbit control for mouse interactions
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.minDistance = 20;
-        controls.update();
+        // // orbit control for mouse interactions
+        // const controls = new OrbitControls(camera, renderer.domElement);
+        // controls.minDistance = 20;
+        // controls.update();
 
-        const stats = new Stats();
-        document.getElementById('container').appendChild(stats.dom);
+        // const stats = new Stats();
+        // document.getElementById('container').appendChild(stats.dom);
 
 
         // extrude setting for creating mesh from 2d shape
@@ -160,6 +162,8 @@ class MapLoader {
         let me = this;
 
         const shaderMaterial = new THREE.ShaderMaterial({ uniforms: { "height": { value: 0.00001 }, "highlightFactor": { value: 0.0 } }, vertexShader: VS, fragmentShader: FS });
+
+        var allCrimeStats = [];
 
         svgLoader.load(
             svgName,
@@ -193,6 +197,7 @@ class MapLoader {
                         me.stateToID[mesh.state] = [];
                     }
                     me.stateToID[mesh.state].push(mesh.id);
+                    allCrimeStats.push({ id: mesh.id, rate: mesh.rate * 100.0, st: mesh.state })
 
                 }
             },
@@ -221,7 +226,7 @@ class MapLoader {
         this.stopTraversing = false;
 
         // for gui control
-        this.createGUI();
+        // this.createGUI();
         this.lastIntersected = -1; // what we are intersecting now
         this.lastIntersectedState = "NONE";
         this.previousIntersected = -1; // what the previous intersection is
@@ -308,42 +313,88 @@ class MapLoader {
             mouseMoved = true;
         });
 
-        this.animate = function () {
-            requestAnimationFrame(me.animate);
-            stats.update();
-            controls.update();
-            if (mouseMoved) {
-                mouse.x = (mouseReal.x / window.innerWidth) * 2 - 1;
-                mouse.y = - (mouseReal.y / window.innerHeight) * 2 + 1;
-                raycaster.setFromCamera(mouse, camera);
-                const intersectionResult = CheckIntersection(raycaster);
-                if (intersectionResult["id"] == -1) {
-                    me.previousIntersected = me.lastIntersected;
-                    me.previousIntersectedState = me.lastIntersectedState;
-                    me.lastIntersected = -1;
-                    me.lastIntersectedState = "NONE";
-                    labelDiv.style.visibility = "hidden";
-                } else {
-                    const obj = me.stateGroups[intersectionResult["state"]].getObjectById(intersectionResult["id"]);
-                    if (obj.isMesh && intersectionResult["id"] != me.lastIntersected) {
-                        CreateLabelDiv(obj);
-                    }
-                    labelDiv.style.visibility = "visible";
-                    if (mouse.x >= 0) {
-                        labelDiv.style.right = (window.innerWidth - mouseReal.x + 5) + 'px';
-                        labelDiv.style.left = "";
-                    } else {
-                        labelDiv.style.right = ""
-                        labelDiv.style.left = (mouseReal.x + 5) + "px";
-                    }
-                    labelDiv.style.top = (mouseReal.y + 5) + 'px';
+        // this.animate = function () {
+        //     requestAnimationFrame(me.animate);
+        //     stats.update();
+        //     controls.update();
+        //     if (mouseMoved) {
+        //         mouse.x = (mouseReal.x / window.innerWidth) * 2 - 1;
+        //         mouse.y = - (mouseReal.y / window.innerHeight) * 2 + 1;
+        //         raycaster.setFromCamera(mouse, camera);
+        //         const intersectionResult = CheckIntersection(raycaster);
+        //         if (intersectionResult["id"] == -1) {
+        //             me.previousIntersected = me.lastIntersected;
+        //             me.previousIntersectedState = me.lastIntersectedState;
+        //             me.lastIntersected = -1;
+        //             me.lastIntersectedState = "NONE";
+        //             labelDiv.style.visibility = "hidden";
+        //         } else {
+        //             const obj = me.stateGroups[intersectionResult["state"]].getObjectById(intersectionResult["id"]);
+        //             if (obj.isMesh && intersectionResult["id"] != me.lastIntersected) {
+        //                 CreateLabelDiv(obj);
+        //             }
+        //             labelDiv.style.visibility = "visible";
+        //             if (mouse.x >= 0) {
+        //                 labelDiv.style.right = (window.innerWidth - mouseReal.x + 5) + 'px';
+        //                 labelDiv.style.left = "";
+        //             } else {
+        //                 labelDiv.style.right = ""
+        //                 labelDiv.style.left = (mouseReal.x + 5) + "px";
+        //             }
+        //             labelDiv.style.top = (mouseReal.y + 5) + 'px';
+        //         }
+        //         mouseMoved = false;
+        //     }
+        //     me.changeHeightAndColor();
+        //     renderer.render(scene, camera);
+        // };
+        // // this.animate();
+
+        // allCrimeStats = allCrimeStats.sort((a, b) => (a.rate > b.rate) ? 1 : ((b.rate > a.rate) ? -1 : 0));
+        // console.log(allCrimeStats);
+        var pos = -1;
+        this.createGif = function () {
+            if (!me.stopTraversing) {
+                requestAnimationFrame(me.createGif);
+                // console.log(me.stopTraversing);
+                me.changeHeightAndColor();
+                renderer.render(scene, camera);
+                if (me.stopTraversing) {
+                    allCrimeStats = allCrimeStats.sort((a, b) => (a.rate > b.rate) ? 1 : ((b.rate > a.rate) ? -1 : 0));
+                    scene.traverse(function (child) {
+                        if (child.isMesh) {
+                            child.scale.z = 0.00001;
+                            child.rate = 0.0;
+                            child.targetHeight = 0.0;
+                            child.material.uniforms.height.value = 0.0;
+                        }
+                    })
+                    me.stopTraversing = false;
+                    pos = 650;
                 }
-                mouseMoved = false;
+                if (pos >= 0 && pos < allCrimeStats.length) {
+                    camera.position.x = 200 * Math.sin((pos - 700) / 50);
+                    camera.position.y = -200 * Math.cos((pos - 700) / 50);
+                    camera.lookAt(new THREE.Vector3(0, 0, 0));
+                    const id = Math.floor(pos);
+                    const obj = allCrimeStats[id];
+
+                    const mesh = me.stateGroups[obj.st].getObjectById(obj.id);
+                    mesh.targetHeight = mesh.deltaHeight * 20.0;
+                    mesh.rate = mesh.deltaHeight;
+                    // console.log(mesh.county, mesh.state, mesh.rate, pos);
+                    pos += 1;
+                } else if (pos >= allCrimeStats.length) {
+                    camera.position.x = 200 * Math.sin((pos - 700) / 50);
+                    camera.position.y = -200 * Math.cos((pos - 700) / 50);
+                    camera.lookAt(new THREE.Vector3(0, 0, 0));
+                    pos += 1;
+                }
+
             }
-            me.changeHeightAndColor();
-            renderer.render(scene, camera);
-        };
-        this.animate();
+        }
+        this.createGif();
+
     }
 
     // initiate the height change by assigning heights to each bar
